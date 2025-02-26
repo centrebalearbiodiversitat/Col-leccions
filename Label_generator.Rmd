@@ -1,0 +1,90 @@
+# Script automatitzat per la creació d'etiquetes a través d'arxius Excel
+
+Autor: Joan Díaz-Calafat
+Data: 2024-10-10
+
+**Antes de correr el código:**
+
+- Ajustar la ruta de archivo  y la página de Excel de la que se quiere generar etiquetas (líneas #26-27)
+
+- Si hay necesidad de duplicar filas en función del valor de una columna, espeficiar el nombre de la columna en la función de las líneas #35-37. Nombre predeterminado: "ind".
+
+- Asegurarse de que los valores dentro del *lapply* del objeto "plot" se ajustan a los nombres de las columnas del Excel (líneas #70-73).
+
+- Si se necesita, ajustar el tamaño y posición de los elementos de la etiqueta en la función *crear_etiquetas* (líneas #42-54).
+
+- *PARA IMPRIMIR*: Si no salen los márgenes, ajustarlos en el diálogo de impresión del lector de PDF, cambiando el tamaño de la hoja en "escala personalizada" a 95%.
+
+```{r message=FALSE, warning=FALSE}
+# Load necessary packages
+library(readxl)
+library(ggplot2)
+library(gridExtra)
+library(beepr)
+
+# Importar Excel
+file_path <- "C:/Users/conte/Documents/R/GITHUB/WhereNext-Pkg_fix/Copy of Listado_Medits_2024_P.xlsx"  # Poner la localización del archivo Excel
+data <- read_excel(file_path, sheet = 3)
+
+# Duplicar filas en función del número de individuos (columna "ind")
+# Si no hay necesidad de duplicar etiquetas, correr 'data$ind <- 1': 
+
+#data$ind <- 1
+
+# Función para duplicar filas tantas veces como "ind":
+repeatRows <- function(df) {
+  df[rep(seq_len(nrow(df)), df$ind), ]
+}
+
+data <- repeatRows(data)
+
+# Función para crear las etiquetas:
+crear_etiquetas <- function(trip_name, taxon_name, date, prep_type, lance, field_number) {
+  ggplot() +
+    geom_rect(aes(xmin = 0, xmax = 2, ymin = 0, ymax = 3), fill = "white", color = "black", size = 1.5) +
+    annotate("text", x = 0, y = 1.8, label = trip_name, hjust = 0, size = 2.5) +
+    annotate("text", x = 0, y = 1.3, label = parse(text = paste("italic('", taxon_name, "')", sep = "")), hjust = 0, size = 2.5) +
+    annotate("text", x = 0, y = 0.8, label = date, hjust = 0, size = 2.5) +
+    annotate("text", x = 0, y = 0.3, label = lance, hjust = 0, size = 2.5) +
+    annotate("text", x = 3, y = 0.8, label = prep_type, hjust = 1, size = 2.5) +
+    annotate("text", x = 3, y = 0.3, label = field_number, hjust = 1, size = 2.5) +
+    xlim(0, 3) + ylim(-0.5, 2) +
+    theme_void() +
+        theme(panel.background = element_rect(fill = "white"))
+}
+
+# Crear un PDF A4
+pdf("plots.pdf", width = 21 / 2.54, height = 29.7 / 2.54)
+
+# Definir márgenes 
+par(mar = c(1, 1, 1, 1))  # (bottom, left, top, right)
+
+# Definir el número de filas y columnas por página
+rows_per_page <- 13
+cols_per_page <- 6
+
+# Loop para cada fila del Excel
+for (start_row in seq(1, nrow(data), by = rows_per_page * cols_per_page)) {
+  end_row <- min(start_row + rows_per_page * cols_per_page - 1, nrow(data))
+  
+  plots <- lapply(start_row:end_row, function(i) {
+    if (i <= nrow(data)) {
+      crear_etiquetas(data$CollectingTripName[i], data$TaxonName[i], data$DateColector[i], 
+                    data$PrepType[i], data$Lance[i], data$`Field Number`[i])
+    } else {
+      NULL
+    }
+  })
+  
+  # Quitar valores NULL de la lista
+  plots <- plots[!sapply(plots, is.null)]
+  
+  # Ordenar las etiquetas por páginas
+  grid.arrange(grobs = plots, ncol = cols_per_page, nrow = rows_per_page)
+}
+
+# Cerrar device
+dev.off()
+
+beep() # listo :)
+```
